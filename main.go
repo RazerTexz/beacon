@@ -9,28 +9,17 @@ import (
 	"time"
 )
 
-var client = &http.Client{Timeout: 5 * time.Second}
-
-func ping(url string) {
-	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
-		url = "https://" + url
-	}
-
+func ping(client *http.Client, url string) (int, time.Duration, error) {
 	start := time.Now()
 	resp, err := client.Get(url)
 	dur := time.Since(start).Round(time.Millisecond)
 
 	if err != nil {
-		fmt.Printf("FAIL  %-6s  %s\n", dur, url)
-		return
+		return 0, dur, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		fmt.Printf("PASS  %-6s  %s\n", dur, url)
-	} else {
-		fmt.Printf("WARN  %-6s  %s (%d)\n", dur, url, resp.StatusCode)
-	}
+	return resp.StatusCode, dur, nil
 }
 
 func main() {
@@ -39,15 +28,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	urls := os.Args[1:]
+	client := &http.Client{Timeout: 5 * time.Second}
 
 	for {
 		var wg sync.WaitGroup
-		for _, url := range urls {
+		for _, url := range os.Args[1:] {
+			if !strings.Contains(url, "://") {
+				url = "https://" + url
+			}
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				ping(url)
+
+				code, dur, err := ping(client, url)
+				switch {
+				case code >= 200 && code < 300:
+					fmt.Printf("PASS  %-6s  %s\n", dur, url)
+				case err == nil:
+					fmt.Printf("WARN  %-6s  %s (%d)\n", dur, url, code)
+				case err != nil:
+					fmt.Printf("FAIL  %-6s  %s\n", dur, url)
+				}
 			}()
 		}
 		wg.Wait()
