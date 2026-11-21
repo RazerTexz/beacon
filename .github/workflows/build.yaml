@@ -1,0 +1,33 @@
+name: Build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.27.4
+
+      - name: Test
+        run: go test -v ./...
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -o beacon-darwin-amd64
+          GOOS=darwin GOARCH=arm64 go build -o beacon-darwin-arm64
+          GOOS=linux GOARCH=amd64 go build -o beacon-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -o beacon-linux-arm64
+          GOOS=windows GOARCH=amd64 go build -o beacon-windows-amd64.exe
+          GOOS=windows GOARCH=arm64 go build -o beacon-windows-arm64.exe
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: beacon-binaries
+          path: beacon-*
